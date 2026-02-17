@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: '/api',
+    baseURL: '/apps/londoncrime/api',
 });
 
 export const fetchSummary = (params = {}) =>

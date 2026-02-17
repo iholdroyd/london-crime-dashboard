@@ -8,7 +8,7 @@ import CrimeInYourAreaPage from './pages/CrimeInYourAreaPage';
 
 function App() {
     return (
-        <Router>
+        <Router basename="/apps/londoncrime">
             <Header />
             <main className="main-content">
                 <Routes>

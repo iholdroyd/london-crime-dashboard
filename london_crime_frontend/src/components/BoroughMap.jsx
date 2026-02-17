@@ -16,7 +16,7 @@ export default function BoroughMap({ boroughTotals, loading, onBoroughClick, sel
     const [geoData, setGeoData] = useState(null);
 
     useEffect(() => {
-        fetch('/london-boroughs.geojson')
+        fetch(`${import.meta.env.BASE_URL}london-boroughs.geojson`)
             .then(r => r.json())
             .then(setGeoData)
             .catch(err => console.error('Failed to load GeoJSON:', err));

@@ -16,8 +16,13 @@ export default function CrimeInYourAreaPage() {
     useEffect(() => {
         fetchOffenceGroups()
             .then(groups => {
-                // NFIB FRAUD already excluded from backend, but double-check
-                const filtered = (groups || []).filter(g => g !== 'NFIB FRAUD');
+                const excluded = ['NFIB FRAUD'];
+                const filtered = (groups || []).filter(g => {
+                    if (excluded.includes(g)) return false;
+                    const lower = g.toLowerCase();
+                    if (lower.includes('other') || lower.includes('unknown') || lower === 'nk') return false;
+                    return true;
+                });
                 setOffenceGroups(filtered);
             })
             .catch(err => console.error('Failed to load offence groups:', err));

@@ -28,8 +28,16 @@ export default function TrendsPage() {
             .then(([dr, boroughs, groups]) => {
                 const sortedMonths = (dr.months || []).sort().reverse(); // Latest first
                 setMonths(sortedMonths);
-                setBoroughsList(boroughs || []);
-                setOffenceGroups(groups || []);
+                const filteredBoroughs = (boroughs || []).filter(b => {
+                    const lower = b.toLowerCase();
+                    return !lower.includes('other') && !lower.includes('unknown') && lower !== 'nk';
+                });
+                setBoroughsList(filteredBoroughs);
+                const filteredGroups = (groups || []).filter(g => {
+                    const lower = g.toLowerCase();
+                    return !lower.includes('other') && !lower.includes('unknown') && lower !== 'nk';
+                });
+                setOffenceGroups(filteredGroups);
 
                 // Build initial filters from URL params or defaults
                 const urlDate = searchParams.get('date');

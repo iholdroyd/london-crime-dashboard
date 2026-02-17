@@ -37,8 +37,16 @@ export default function OverviewPage() {
             .then(([dr, boroughs, groups]) => {
                 const sortedMonths = (dr.months || []).sort().reverse(); // Latest to Earliest
                 setMonths(sortedMonths);
-                setBoroughsList(boroughs || []);
-                setOffenceGroups(groups || []);
+                const filteredBoroughs = (boroughs || []).filter(b => {
+                    const lower = b.toLowerCase();
+                    return !lower.includes('other') && !lower.includes('unknown') && lower !== 'nk';
+                });
+                setBoroughsList(filteredBoroughs);
+                const filteredGroups = (groups || []).filter(g => {
+                    const lower = g.toLowerCase();
+                    return !lower.includes('other') && !lower.includes('unknown') && lower !== 'nk';
+                });
+                setOffenceGroups(filteredGroups);
 
                 // Set default start date to LATEST (which is now index 0)
                 if (sortedMonths.length > 0) {

@@ -28,6 +28,8 @@ london_crime_frontend/build/
 # Jupyter
 .ipynb_checkpoints/
 
+Initial.ipynb
+
 # OS
 .DS_Store
 Thumbs.db

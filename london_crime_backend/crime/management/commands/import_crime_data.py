@@ -5,7 +5,6 @@ Usage:
     python manage.py import_crime_data          # Download if missing, then import
     python manage.py import_crime_data --force   # Re-download and re-import
 """
-import io
 import os
 
 import pandas as pd
@@ -17,21 +16,16 @@ from crime.models import CrimeRecord
 
 
 EXCEL_FILENAME = 'MonthlyCrimeDashboard_TNOCrimeData.xlsx'
+CSV_FILENAME = 'MonthlyCrimeDashboard_TNOCrimeData.csv'
 
-# Column mapping: Excel column name -> model field name
-COLUMN_MAP = {
+# Only the columns we actually use in the dashboard
+COLUMNS_TO_KEEP = {
     'Month_Year': 'month_year',
     'Area Type': 'area_type',
-    'Borough_SNT': 'borough_snt',
     'Area name': 'area_name',
-    'Area code': 'area_code',
     'Offence Group': 'offence_group',
     'Offence Subgroup': 'offence_subgroup',
-    'Measure': 'measure',
-    'Financial Year': 'financial_year',
-    'FY_FYIndex': 'fy_index',
     'Count': 'count',
-    'Refresh Date': 'refresh_date',
 }
 
 
@@ -47,18 +41,20 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         excel_path = settings.DATA_DIR / EXCEL_FILENAME
+        csv_path = settings.DATA_DIR / CSV_FILENAME
         force = options['force']
 
-        # Step 1: Download if needed
-        if not excel_path.exists() or force:
+        # Step 1: Download XLSX if needed
+        if not csv_path.exists() or force:
             self._download(excel_path)
+            self._convert_to_csv(excel_path, csv_path)
         else:
             self.stdout.write(self.style.SUCCESS(
-                f'Using cached file: {excel_path}'
+                f'Using cached CSV: {csv_path}'
             ))
 
-        # Step 2: Parse and import
-        self._import(excel_path)
+        # Step 2: Import from CSV (much faster than XLSX)
+        self._import(csv_path)
 
     def _download(self, dest_path):
         url = settings.CRIME_DATA_EXCEL_URL
@@ -91,48 +87,50 @@ class Command(BaseCommand):
                     )
 
         self.stdout.write('')  # newline
-        self.stdout.write(self.style.SUCCESS(f'Saved to {dest_path}'))
+        self.stdout.write(self.style.SUCCESS(f'Saved XLSX to {dest_path}'))
 
-    def _import(self, excel_path):
-        self.stdout.write('Reading Excel file (this may take a few minutes)...')
+    def _convert_to_csv(self, excel_path, csv_path):
+        """Convert XLSX to CSV, keeping only the columns we need."""
+        self.stdout.write('Converting XLSX to CSV (this may take a few minutes)...')
 
-        df = pd.read_excel(
-            excel_path,
-            engine='openpyxl',
-        )
+        df = pd.read_excel(excel_path, engine='openpyxl')
+        self.stdout.write(f'  → {len(df)} rows read from XLSX')
 
+        # Keep only the columns we use and rename them
+        available_cols = [c for c in COLUMNS_TO_KEEP.keys() if c in df.columns]
+        df = df[available_cols]
+        df = df.rename(columns=COLUMNS_TO_KEEP)
+
+        df.to_csv(csv_path, index=False)
+
+        # Report size savings
+        xlsx_size = os.path.getsize(excel_path) / (1024 * 1024)
+        csv_size = os.path.getsize(csv_path) / (1024 * 1024)
+        self.stdout.write(self.style.SUCCESS(
+            f'  → Converted: {xlsx_size:.1f} MB (XLSX) → {csv_size:.1f} MB (CSV)'
+        ))
+
+        # Optionally remove the XLSX to save disk space
+        os.remove(excel_path)
+        self.stdout.write(f'  → Removed XLSX file to save disk space')
+
+    def _import(self, csv_path):
+        self.stdout.write('Reading CSV file...')
+
+        df = pd.read_csv(csv_path, dtype=str)
         self.stdout.write(f'  → {len(df)} rows, {len(df.columns)} columns')
-        self.stdout.write(f'  → Columns: {list(df.columns)}')
-
-        # Rename columns
-        df = df.rename(columns=COLUMN_MAP)
-
-        # Keep only mapped columns (in case there are extras)
-        expected = list(COLUMN_MAP.values())
-        available = [c for c in expected if c in df.columns]
-        df = df[available]
 
         # Clean data
         df = df.fillna({
             'area_type': '',
-            'borough_snt': '',
             'area_name': '',
-            'area_code': '',
             'offence_group': '',
             'offence_subgroup': '',
-            'measure': '',
-            'financial_year': '',
-            'refresh_date': '',
-            'count': 0,
+            'count': '0',
         })
 
-        # Convert month_year to string for consistent storage
         df['month_year'] = df['month_year'].astype(str)
-        df['refresh_date'] = df['refresh_date'].astype(str)
         df['count'] = pd.to_numeric(df['count'], errors='coerce').fillna(0).astype(int)
-
-        if 'fy_index' in df.columns:
-            df['fy_index'] = pd.to_numeric(df['fy_index'], errors='coerce')
 
         # Clear existing data
         self.stdout.write('Clearing existing records...')
@@ -149,14 +147,14 @@ class Command(BaseCommand):
 
             records = []
             for _, row in batch.iterrows():
-                record_data = {}
-                for field in available:
-                    val = row[field]
-                    # Convert NaN/NaT to None for nullable fields
-                    if pd.isna(val):
-                        val = None
-                    record_data[field] = val
-                records.append(CrimeRecord(**record_data))
+                records.append(CrimeRecord(
+                    month_year=row['month_year'],
+                    area_type=row.get('area_type', ''),
+                    area_name=row.get('area_name', ''),
+                    offence_group=row.get('offence_group', ''),
+                    offence_subgroup=row.get('offence_subgroup', ''),
+                    count=row.get('count', 0),
+                ))
 
             CrimeRecord.objects.bulk_create(records)
 
@@ -168,9 +166,9 @@ class Command(BaseCommand):
         ))
 
         # Print summary stats
-        boroughs = CrimeRecord.objects.values_list('area_name', flat=True).distinct().count()
+        areas = CrimeRecord.objects.values_list('area_name', flat=True).distinct().count()
         offence_groups = CrimeRecord.objects.values_list('offence_group', flat=True).distinct().count()
         months = CrimeRecord.objects.values_list('month_year', flat=True).distinct().count()
-        self.stdout.write(f'  → {boroughs} unique areas')
+        self.stdout.write(f'  → {areas} unique areas')
         self.stdout.write(f'  → {offence_groups} offence groups')
         self.stdout.write(f'  → {months} distinct months')

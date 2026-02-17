@@ -16,6 +16,10 @@ backend_venv/
 db.sqlite3
 *.log
 
+# Data files (downloaded/generated at runtime)
+london_crime_backend/data/*.xlsx
+london_crime_backend/data/*.csv
+
 # Node / React
 node_modules/
 london_crime_frontend/dist/

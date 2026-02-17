@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Virtual environments
+venv/
+backend_venv/
+.env
+
+# Django
+db.sqlite3
+*.log
+
+# Node / React
+node_modules/
+london_crime_frontend/dist/
+london_crime_frontend/build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

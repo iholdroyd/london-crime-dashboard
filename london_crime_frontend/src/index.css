@@ -798,6 +798,11 @@ body {
 }
 
 /* Ensure the arrow/tip also matches if needed */
+.leaflet-popup-tip {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
 .leaflet-tooltip-left.custom-tooltip::before {
   border-left-color: var(--color-border);
 }

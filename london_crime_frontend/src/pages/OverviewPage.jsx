@@ -94,6 +94,11 @@ export default function OverviewPage() {
         // Clean params
         Object.keys(params).forEach(key => params[key] === '' && delete params[key]);
 
+        // FIX: Force snapshot mode (single month) if start_date is present but end_date is missing
+        if (params.start_date && !params.end_date) {
+            params.end_date = params.start_date;
+        }
+
         // Add offence_group to API params when drilled to group or subgroup level
         const dataParams = { ...params };
         if (drillGroup) {
@@ -133,6 +138,13 @@ export default function OverviewPage() {
             });
     }, [filters, drillGroup, drillCategory]);
 
+    // Reset drill-down when offence group changes
+    useEffect(() => {
+        setDrillLevel('category');
+        setDrillCategory(null);
+        setDrillGroup(null);
+    }, [filters.offence_group]);
+
     // Aggregate offence breakdown into 4 categories
     const categoryData = useMemo(() => {
         if (!offenceBreakdown || offenceBreakdown.length === 0) return [];
@@ -155,19 +167,23 @@ export default function OverviewPage() {
 
     // Determine what data to show in the bar chart
     const chartData = useMemo(() => {
+        // If global filter is active, show the raw breakdown (subgroups)
+        if (filters.offence_group) return offenceBreakdown;
+
         if (drillLevel === 'category') return categoryData;
         if (drillLevel === 'group') return groupDataForCategory;
         if (drillLevel === 'subgroup') return offenceBreakdown; // API already returns subgroups when offence_group is set
         return categoryData;
-    }, [drillLevel, categoryData, groupDataForCategory, offenceBreakdown]);
+    }, [drillLevel, categoryData, groupDataForCategory, offenceBreakdown, filters.offence_group]);
 
     // Determine chart title
     const chartTitle = useMemo(() => {
+        if (filters.offence_group) return filters.offence_group;
         if (drillLevel === 'category') return 'Crime by Category';
         if (drillLevel === 'group') return drillCategory || 'Offences by Group';
         if (drillLevel === 'subgroup') return drillGroup || 'Offence Subtypes';
         return 'Crime by Category';
-    }, [drillLevel, drillCategory, drillGroup]);
+    }, [drillLevel, drillCategory, drillGroup, filters.offence_group]);
 
     const handleBarClick = useCallback((label) => {
         if (drillLevel === 'category') {
@@ -219,6 +235,7 @@ export default function OverviewPage() {
                 <BoroughMap
                     boroughTotals={boroughTotals}
                     selectedBorough={filters.borough}
+                    category={drillCategory}
                     loading={loading}
                     onBoroughClick={(b) => setFilters(prev => {
                         // Toggle borough

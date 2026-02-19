@@ -136,6 +136,15 @@ class Command(BaseCommand):
                     val = row[idx].value if idx < len(row) else None
                     row_data[field_name] = val
                 
+                # FILTER: Only keep data from 2023 onwards
+                # This reduces DB size and significantly speeds up imports/queries
+                month_val = row_data.get('month_year')
+                if month_val:
+                    # Convert to string for comparison (works for datetime objs or str)
+                    # "2023..." >= "2023" is True. "2022..." is False.
+                    if str(month_val) < '2023':
+                        continue
+
                 writer.writerow(row_data)
                 count += 1
                 

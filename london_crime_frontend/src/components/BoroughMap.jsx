@@ -12,7 +12,7 @@ function MapEvents({ onBackgroundClick }) {
     return null;
 }
 
-export default function BoroughMap({ boroughTotals, loading, onBoroughClick, selectedBorough }) {
+export default function BoroughMap({ boroughTotals, loading, onBoroughClick, selectedBorough, category }) {
     const [geoData, setGeoData] = useState(null);
 
     useEffect(() => {
@@ -46,14 +46,12 @@ export default function BoroughMap({ boroughTotals, loading, onBoroughClick, sel
     const getColor = (count) => {
         if (!count && count !== 0) return '#e5e7eb'; // No data -> gray
 
-        if (max === min) return '#991b1b'; // Single value -> Dark Red
+        if (max === min) return '#991b1b'; // Single value -> Dark Red (fallback)
 
         const ratio = (count - min) / (max - min);
 
-        // Bias towards red/bad. 
-        // 0.0 - 0.1 : Green to Yellow (only lowest 10%)
-        // 0.1 - 1.0 : Yellow to Crimson (remaining 90%)
-
+        // ORIGINAL Logic: Green -> Yellow -> Red
+        // Bias towards red for higher values
         if (ratio < 0.1) {
             // Interpolate Green (#10b981) to Yellow (#facc15)
             const localRatio = ratio / 0.1;
@@ -110,7 +108,7 @@ export default function BoroughMap({ boroughTotals, loading, onBoroughClick, sel
             });
             // No click handler attached = no action on click
         } else {
-            layer.bindTooltip(`<strong>${boroughName}</strong><br/>${count} offences`, {
+            layer.bindTooltip(`<strong>${boroughName}</strong><br/>${count.toLocaleString()} offences`, {
                 sticky: true
             });
 
@@ -137,7 +135,7 @@ export default function BoroughMap({ boroughTotals, loading, onBoroughClick, sel
                 </div>
             )}
 
-            <h3>Crime by Borough</h3>
+            <h3>Crime by Borough {category ? `(${category})` : ''}</h3>
             {/* CartoDB Positron basemap provides geographic context */}
             <MapContainer center={[51.505, -0.09]} zoom={10} style={{ height: '400px', width: '100%', background: '#f5f5f5' }}>
                 <MapEvents onBackgroundClick={() => onBoroughClick && onBoroughClick(null)} />
@@ -149,7 +147,7 @@ export default function BoroughMap({ boroughTotals, loading, onBoroughClick, sel
                 />
                 {geoData && (
                     <GeoJSON
-                        key={JSON.stringify(countMap).substring(0, 100) + (selectedBorough || '')}
+                        key={JSON.stringify(countMap).substring(0, 50) + (selectedBorough || '') + (category || '')}
                         data={geoData}
                         style={style}
                         onEachFeature={onEachFeature}

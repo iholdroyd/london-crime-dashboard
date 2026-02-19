@@ -89,6 +89,7 @@ export default function OverviewPage() {
 
     // Load Data
     useEffect(() => {
+        let active = true;
         setLoading(true);
         const params = { ...filters };
         // Clean params
@@ -105,37 +106,46 @@ export default function OverviewPage() {
             dataParams.offence_group = drillGroup;
         }
 
-        // Map Context Params: Exclude borough filter to keep all boroughs colored
-        const mapParams = { ...params };
-        delete mapParams.borough;
-
-        // Sync map with drill-down state
+        // Apply drill-down context to params
+        const drillParams = {};
         if (drillGroup) {
-            // Drilled into a specific group -> map shows that group only
-            mapParams.offence_group = drillGroup;
+            drillParams.offence_group = drillGroup;
         } else if (drillCategory) {
-            // Drilled into a category -> map shows all groups in that category
             const cat = CRIME_CATEGORIES.find(c => c.label === drillCategory);
             if (cat) {
-                mapParams.offence_groups = cat.groups.join(',');
+                drillParams.offence_groups = cat.groups.join(',');
             }
         }
 
+        const summaryParams = { ...params, ...drillParams };
+
+        // Map Context Params: Exclude borough filter to keep all boroughs colored
+        const mapParams = { ...summaryParams };
+        delete mapParams.borough;
+
         Promise.all([
-            fetchSummary(params),
-            fetchBoroughTotals(mapParams), // Use context-aware params for map
+            fetchSummary(summaryParams), // Validated: KPIs update on chart drill-down
+            fetchBoroughTotals(mapParams), // Validated: Map updates on chart drill-down
             fetchOffenceBreakdown(dataParams)
         ])
             .then(([sum, bt, ob]) => {
-                setSummary(sum);
-                setBoroughTotals(bt);
-                setOffenceBreakdown(ob);
-                setLoading(false);
+                if (active) {
+                    setSummary(sum);
+                    setBoroughTotals(bt);
+                    setOffenceBreakdown(ob);
+                    setLoading(false);
+                }
             })
             .catch(err => {
-                console.error('Failed to load data:', err);
-                setLoading(false);
+                if (active) {
+                    console.error('Failed to load data:', err);
+                    setLoading(false);
+                }
             });
+
+        return () => {
+            active = false;
+        };
     }, [filters, drillGroup, drillCategory]);
 
     // Reset drill-down when offence group changes

@@ -17,6 +17,7 @@ def _apply_filters(queryset, request):
     end_date = request.query_params.get('end_date')
     borough = request.query_params.get('borough')
     offence_group = request.query_params.get('offence_group')
+    offence_groups = request.query_params.get('offence_groups')  # comma-separated
     offence_subgroup = request.query_params.get('offence_subgroup')
     area_type = request.query_params.get('area_type')
 
@@ -28,6 +29,9 @@ def _apply_filters(queryset, request):
         queryset = queryset.filter(area_name=borough)
     if offence_group:
         queryset = queryset.filter(offence_group=offence_group)
+    elif offence_groups:
+        groups_list = [g.strip() for g in offence_groups.split(',') if g.strip()]
+        queryset = queryset.filter(offence_group__in=groups_list)
     if offence_subgroup:
         queryset = queryset.filter(offence_subgroup=offence_subgroup)
     if area_type:
@@ -198,7 +202,7 @@ def offence_groups(request):
     """Returns list of unique offence groups."""
     groups = sorted(
         CrimeRecord.objects
-        .exclude(offence_group='NFIB FRAUD')
+        .exclude(offence_group='Nfib Fraud')
         .values_list('offence_group', flat=True)
         .distinct()
     )

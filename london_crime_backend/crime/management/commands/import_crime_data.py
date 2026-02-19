@@ -132,6 +132,10 @@ class Command(BaseCommand):
         df['month_year'] = df['month_year'].astype(str)
         df['count'] = pd.to_numeric(df['count'], errors='coerce').fillna(0).astype(int)
 
+        # Title-case offence names (e.g. "THEFT" -> "Theft")
+        df['offence_group'] = df['offence_group'].str.title()
+        df['offence_subgroup'] = df['offence_subgroup'].str.title()
+
         # Clear existing data
         self.stdout.write('Clearing existing records...')
         CrimeRecord.objects.all().delete()

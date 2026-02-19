@@ -2,12 +2,12 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
 
-export default function OffenceBarChart({ data, loading, onBarClick, isDrilledDown, onDrillUp }) {
+export default function OffenceBarChart({ data, loading, onBarClick, isDrilledDown, drillLevel, chartTitle, onDrillUp }) {
     // If no data and not loading, show empty state
     if (!loading && (!data || data.length === 0)) {
         return (
             <div className="chart-card">
-                <div className="chart-title">Offence Breakdown</div>
+                <div className="chart-title">{chartTitle || 'Offence Breakdown'}</div>
                 <div style={{ padding: 20, textAlign: 'center', color: '#888' }}>No data available</div>
             </div>
         );
@@ -23,6 +23,13 @@ export default function OffenceBarChart({ data, loading, onBarClick, isDrilledDo
             // Use full label 
             display_label: d.label
         })) : [];
+
+    // Determine tooltip drill hint
+    const drillHint = drillLevel === 'category'
+        ? 'Click to see offence groups'
+        : drillLevel === 'group'
+            ? 'Click to see subtypes'
+            : null;
 
     const CustomTooltip = ({ active, payload }) => {
         if (active && payload && payload.length) {
@@ -41,9 +48,9 @@ export default function OffenceBarChart({ data, loading, onBarClick, isDrilledDo
                     <div style={{ color: '#00a3e0' }}>
                         {payload[0].value.toLocaleString('en-GB')} offences
                     </div>
-                    {!isDrilledDown && (
+                    {drillHint && (
                         <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: 4 }}>
-                            Click to see subtypes
+                            {drillHint}
                         </div>
                     )}
                 </div>
@@ -66,7 +73,7 @@ export default function OffenceBarChart({ data, loading, onBarClick, isDrilledDo
             )}
 
             <div className="chart-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>{isDrilledDown ? 'Offence Subtypes' : 'Offences by Group'}</span>
+                <span>{chartTitle || (isDrilledDown ? 'Offence Subtypes' : 'Offences by Group')}</span>
                 {isDrilledDown && (
                     <button
                         onClick={onDrillUp}
@@ -79,7 +86,7 @@ export default function OffenceBarChart({ data, loading, onBarClick, isDrilledDo
                             cursor: 'pointer'
                         }}
                     >
-                        ← Back to Groups
+                        ← Back
                     </button>
                 )}
             </div>
@@ -112,14 +119,14 @@ export default function OffenceBarChart({ data, loading, onBarClick, isDrilledDo
                         radius={[0, 4, 4, 0]}
                         maxBarSize={24}
                         onClick={(data) => {
-                            if (!isDrilledDown && onBarClick) {
+                            if (drillLevel !== 'subgroup' && onBarClick) {
                                 onBarClick(data.label);
                             }
                         }}
-                        style={{ cursor: isDrilledDown ? 'default' : 'pointer' }}
+                        style={{ cursor: drillLevel === 'subgroup' ? 'default' : 'pointer' }}
                     >
                         {sorted.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={isDrilledDown ? '#3b82f6' : '#1e40af'} />
+                            <Cell key={`cell-${index}`} fill="#1e40af" />
                         ))}
                     </Bar>
                 </BarChart>
@@ -127,3 +134,4 @@ export default function OffenceBarChart({ data, loading, onBarClick, isDrilledDo
         </div>
     );
 }
+

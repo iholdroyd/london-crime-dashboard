@@ -16,7 +16,7 @@ export default function CrimeInYourAreaPage() {
     useEffect(() => {
         fetchOffenceGroups()
             .then(groups => {
-                const excluded = ['NFIB FRAUD'];
+                const excluded = ['Nfib Fraud'];
                 const filtered = (groups || []).filter(g => {
                     if (excluded.includes(g)) return false;
                     const lower = g.toLowerCase();

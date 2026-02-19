@@ -15,6 +15,7 @@ export default function TrendsPage() {
 
     const [filters, setFilters] = useState({});
     const [timeSeries, setTimeSeries] = useState([]);
+    const [londonAverage, setLondonAverage] = useState([]);
     const [loading, setLoading] = useState(true);
     const [initialized, setInitialized] = useState(false);
 
@@ -86,9 +87,20 @@ export default function TrendsPage() {
         const params = { ...filters };
         Object.keys(params).forEach(key => params[key] === '' && delete params[key]);
 
-        fetchTimeSeries(params)
-            .then(ts => {
+        // Always fetch the main time series
+        const promises = [fetchTimeSeries(params)];
+
+        // If a borough is selected, also fetch London-wide average (no borough filter)
+        if (params.borough) {
+            const londonParams = { ...params };
+            delete londonParams.borough;
+            promises.push(fetchTimeSeries(londonParams));
+        }
+
+        Promise.all(promises)
+            .then(([ts, londonTs]) => {
                 setTimeSeries(ts);
+                setLondonAverage(londonTs || []);
                 setLoading(false);
             })
             .catch(err => {
@@ -96,6 +108,29 @@ export default function TrendsPage() {
                 setLoading(false);
             });
     }, [filters, initialized]);
+
+    // Build dynamic chart title
+    const crimeType = filters.offence_group || 'a Crime';
+    const place = filters.borough || 'London';
+
+    // Format date range for title
+    const formatDateForTitle = (dateStr) => {
+        if (!dateStr) return '';
+        try {
+            const d = new Date(dateStr + (dateStr.length === 7 ? '-01' : ''));
+            return d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+        } catch {
+            return dateStr;
+        }
+    };
+
+    const startDateLabel = formatDateForTitle(filters.start_date);
+    const endDateLabel = formatDateForTitle(filters.end_date);
+    const dateRange = startDateLabel && endDateLabel
+        ? `${startDateLabel} and ${endDateLabel}`
+        : startDateLabel || endDateLabel || '';
+
+    const chartTitle = `Number of Times People Have Reported ${crimeType} in ${place}${dateRange ? ` Between ${dateRange}` : ''}`;
 
     return (
         <div className="overview-page">
@@ -117,7 +152,14 @@ export default function TrendsPage() {
                 showEndDate={true}
             />
 
-            <TimeSeriesChart data={timeSeries} loading={loading} />
+            <TimeSeriesChart
+                data={timeSeries}
+                londonAverage={londonAverage}
+                loading={loading}
+                chartTitle={chartTitle}
+                showLondonAverage={!!filters.borough}
+                boroughName={filters.borough}
+            />
         </div>
     );
 }

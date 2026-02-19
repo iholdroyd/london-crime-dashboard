@@ -5,10 +5,12 @@ Usage:
     python manage.py import_crime_data          # Download if missing, then import
     python manage.py import_crime_data --force   # Re-download and re-import
 """
+import csv
 import os
 
 import pandas as pd
 import requests
+from openpyxl import load_workbook
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
@@ -47,7 +49,7 @@ class Command(BaseCommand):
         # Step 1: Download XLSX if needed
         if not csv_path.exists() or force:
             self._download(excel_path)
-            self._convert_to_csv(excel_path, csv_path)
+            self._convert_to_csv_streaming(excel_path, csv_path)
         else:
             self.stdout.write(self.style.SUCCESS(
                 f'Using cached CSV: {csv_path}'
@@ -89,19 +91,61 @@ class Command(BaseCommand):
         self.stdout.write('')  # newline
         self.stdout.write(self.style.SUCCESS(f'Saved XLSX to {dest_path}'))
 
-    def _convert_to_csv(self, excel_path, csv_path):
-        """Convert XLSX to CSV, keeping only the columns we need."""
-        self.stdout.write('Converting XLSX to CSV (this may take a few minutes)...')
+    def _convert_to_csv_streaming(self, excel_path, csv_path):
+        """
+        Convert XLSX to CSV using openpyxl streaming (read_only=True).
+        This avoids loading the entire file into memory, preventing OOM crashes on small instances.
+        """
+        self.stdout.write('Converting XLSX to CSV (streaming mode)...')
+        self.stdout.write('  → Opening workbook (this may take a moment)...')
 
-        df = pd.read_excel(excel_path, engine='openpyxl')
-        self.stdout.write(f'  → {len(df)} rows read from XLSX')
+        # Load workbook in read-only mode (streaming)
+        wb = load_workbook(excel_path, read_only=True, data_only=True)
+        ws = wb.active
 
-        # Keep only the columns we use and rename them
-        available_cols = [c for c in COLUMNS_TO_KEEP.keys() if c in df.columns]
-        df = df[available_cols]
-        df = df.rename(columns=COLUMNS_TO_KEEP)
+        # Get rows generator
+        rows = ws.rows
+        
+        # Read header row
+        try:
+            header_row = next(rows)
+            headers = [cell.value for cell in header_row]
+        except StopIteration:
+            self.stdout.write(self.style.ERROR('Empty Excel file'))
+            return
 
-        df.to_csv(csv_path, index=False)
+        # Map Excel column names to indices
+        col_indices = {}
+        for col_name, field_name in COLUMNS_TO_KEEP.items():
+            try:
+                idx = headers.index(col_name)
+                col_indices[field_name] = idx
+            except ValueError:
+                self.stdout.write(self.style.WARNING(f'Column "{col_name}" not found in Excel'))
+
+        # Prepare CSV output
+        with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=COLUMNS_TO_KEEP.values())
+            writer.writeheader()
+
+            count = 0
+            for row in rows:
+                row_data = {}
+                # Extract only the columns we need
+                for field_name, idx in col_indices.items():
+                    val = row[idx].value if idx < len(row) else None
+                    row_data[field_name] = val
+                
+                writer.writerow(row_data)
+                count += 1
+                
+                if count % 50000 == 0:
+                    self.stdout.write(f'  → Processed {count} rows...', ending='\r')
+
+        self.stdout.write(f'  → Processed {count} rows total.')
+        
+        # Cleanup
+        wb.close()
 
         # Report size savings
         xlsx_size = os.path.getsize(excel_path) / (1024 * 1024)
@@ -110,13 +154,16 @@ class Command(BaseCommand):
             f'  → Converted: {xlsx_size:.1f} MB (XLSX) → {csv_size:.1f} MB (CSV)'
         ))
 
-        # Optionally remove the XLSX to save disk space
+        # Remove the XLSX to save disk space
         os.remove(excel_path)
-        self.stdout.write(f'  → Removed XLSX file to save disk space')
+        self.stdout.write(f'  → Removed XLSX file')
 
     def _import(self, csv_path):
         self.stdout.write('Reading CSV file...')
 
+        # Pandas is fine for CSV reading (much lower RAM overhead than chunks of XML)
+        # But we can also use chunksize if we really needed to be safe, 
+        # though read_csv is generally efficient enough for 75MB on 512MB RAM.
         df = pd.read_csv(csv_path, dtype=str)
         self.stdout.write(f'  → {len(df)} rows, {len(df.columns)} columns')
 
@@ -133,8 +180,10 @@ class Command(BaseCommand):
         df['count'] = pd.to_numeric(df['count'], errors='coerce').fillna(0).astype(int)
 
         # Title-case offence names (e.g. "THEFT" -> "Theft")
-        df['offence_group'] = df['offence_group'].str.title()
-        df['offence_subgroup'] = df['offence_subgroup'].str.title()
+        if 'offence_group' in df.columns:
+            df['offence_group'] = df['offence_group'].str.title()
+        if 'offence_subgroup' in df.columns:
+            df['offence_subgroup'] = df['offence_subgroup'].str.title()
 
         # Clear existing data
         self.stdout.write('Clearing existing records...')

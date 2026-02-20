@@ -98,11 +98,16 @@ def summary(request):
     if len(months) == 1:
         # SNAPSHOT MODE: compare single month vs 1-month-ago and 12-months-ago
         try:
-            # Handle both YYYY-MM-DD and YYYY-MM formats
-            if len(latest_month) == 10:  # YYYY-MM-DD
+            # Handle YYYY-MM-DD HH:MM:SS, YYYY-MM-DD and YYYY-MM formats
+            if len(latest_month) >= 19:
+                ref_date = datetime.strptime(latest_month[:19], '%Y-%m-%d %H:%M:%S')
+                date_fmt = '%Y-%m-%d %H:%M:%S'
+            elif len(latest_month) == 10:  # YYYY-MM-DD
                 ref_date = datetime.strptime(latest_month, '%Y-%m-%d')
+                date_fmt = '%Y-%m-%d'
             else:
                 ref_date = datetime.strptime(latest_month, '%Y-%m')
+                date_fmt = '%Y-%m'
         except ValueError:
             ref_date = None
 
@@ -110,7 +115,7 @@ def summary(request):
             cqs = _comparison_qs()
 
             # Generate comparison date strings in same format as data
-            date_fmt = '%Y-%m-%d' if len(latest_month) == 10 else '%Y-%m'
+            # (date_fmt is computed above)
 
             # 1-month trend
             prev_1_date = ref_date - relativedelta(months=1)
